@@ -1,5 +1,4 @@
-from flask import Flask, render_template, request
-from flask import make_response
+from flask import Flask, render_template, request, make_response
 import os
 import google.generativeai as genai
 from fpdf import FPDF
@@ -8,7 +7,10 @@ from fpdf.enums import XPos, YPos
 app = Flask(__name__)
 
 genai.configure(api_key=os.environ.get("GEMINI_API_KEY"))
-model = genai.GenerativeModel("gemini-1.5-flash")
+model = genai.GenerativeModel("gemini-2.5-flash")
+
+# Resolve base directory robustly (works in Vercel serverless)
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 # -------------------- Generate Paper --------------------
 def generate_paper(subject, chapter, difficulty, suggestions):
@@ -30,7 +32,6 @@ def generate_paper(subject, chapter, difficulty, suggestions):
         "Respond only with the exam questions and heading\u2014no hints, explanations, or extra details, "
         "as the response will be printed as a PDF."
     )
-
     response = model.generate_content(prompt)
     return response.text
 
@@ -40,35 +41,36 @@ def create_exam_pdf(text, subject, chapter):
     pdf.add_page()
     pdf.set_margins(15, 15, 15)
 
-    font_path = os.path.join(os.path.dirname(__file__), 'static', 'fonts', 'DejaVuSans.ttf')
+    # Use absolute path — avoids empty string in serverless environments
+    font_path = os.path.join(BASE_DIR, 'static', 'fonts', 'DejaVuSans.ttf')
     pdf.add_font("DejaVu", "", font_path)
     pdf.add_font("DejaVu", "B", font_path)
     pdf.add_font("DejaVu", "I", font_path)
 
     page_width = pdf.w - 2 * pdf.l_margin
 
+    # Header
     pdf.set_font("DejaVu", "B", 16)
-    header = f"Class 10 Model Paper - {subject} - {chapter}"
-    pdf.cell(0, 12, header, new_x=XPos.LMARGIN, new_y=YPos.NEXT, align="C")
+    pdf.cell(0, 12, f"Class 10 Model Paper - {subject} - {chapter}",
+             new_x=XPos.LMARGIN, new_y=YPos.NEXT, align="C")
     pdf.ln(10)
 
-    lines = text.split('\n')
-    for line in lines:
+    # Body
+    for line in text.split('\n'):
         line = line.strip()
         if not line:
             pdf.ln(4)
             continue
-
         if line.startswith("**Section"):
-            section_title = line.replace("**", "")
             pdf.set_font("DejaVu", "B", 14)
-            pdf.cell(0, 10, section_title, new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+            pdf.cell(0, 10, line.replace("**", ""), new_x=XPos.LMARGIN, new_y=YPos.NEXT)
             pdf.ln(3)
         else:
             pdf.set_font("DejaVu", "", 12)
             pdf.multi_cell(page_width, 7.5, line)
             pdf.ln(0.5)
 
+    # Footer
     pdf.ln(5)
     pdf.set_font("DejaVu", "I", 12)
     pdf.cell(0, 10, "*End of Paper*", new_x=XPos.LMARGIN, new_y=YPos.NEXT, align="C")
@@ -91,7 +93,8 @@ def index():
 
         response = make_response(pdf_content)
         response.headers.set('Content-Type', 'application/pdf')
-        response.headers.set('Content-Disposition', 'attachment', filename=f"{subject}_{chapter}.pdf")
+        response.headers.set('Content-Disposition', 'attachment',
+                             filename=f"{subject}_{chapter}.pdf")
         return response
 
     return render_template('form.html')
