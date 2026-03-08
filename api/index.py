@@ -1,19 +1,20 @@
 from flask import Flask, render_template, request, make_response
 import os
-import google.generativeai as genai
+import requests
 from fpdf import FPDF
 from fpdf.enums import XPos, YPos
 
-app = Flask(__name__)
+app = Flask(__name__, 
+            template_folder='../templates',
+            static_folder='../static')
 
-genai.configure(api_key=os.environ.get("GEMINI_API_KEY"))
-model = genai.GenerativeModel("gemini-2.5-flash")
-
-# Resolve base directory robustly (works in Vercel serverless)
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 # -------------------- Generate Paper --------------------
 def generate_paper(subject, chapter, difficulty, suggestions):
+    api_key = os.environ.get("GEMINI_API_KEY")
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={api_key}"
+
     prompt = (
         f"Create a model question paper for class 10 {subject}, "
         f"{chapter} chapter, difficulty level: {difficulty}. "
@@ -32,8 +33,16 @@ def generate_paper(subject, chapter, difficulty, suggestions):
         "Respond only with the exam questions and heading\u2014no hints, explanations, or extra details, "
         "as the response will be printed as a PDF."
     )
-    response = model.generate_content(prompt)
-    return response.text
+
+    payload = {
+        "contents": [{"parts": [{"text": prompt}]}],
+        "generationConfig": {"maxOutputTokens": 2048}
+    }
+
+    resp = requests.post(url, json=payload, timeout=55)
+    resp.raise_for_status()
+    data = resp.json()
+    return data["candidates"][0]["content"]["parts"][0]["text"]
 
 
 def create_exam_pdf(text, subject, chapter):
@@ -41,21 +50,19 @@ def create_exam_pdf(text, subject, chapter):
     pdf.add_page()
     pdf.set_margins(15, 15, 15)
 
-    # Use absolute path — avoids empty string in serverless environments
-    font_path = os.path.join(BASE_DIR, 'static', 'fonts', 'DejaVuSans.ttf')
+    font_path = os.path.join(BASE_DIR, '..', 'static', 'fonts', 'DejaVuSans.ttf')
+    font_path = os.path.normpath(font_path)
     pdf.add_font("DejaVu", "", font_path)
     pdf.add_font("DejaVu", "B", font_path)
     pdf.add_font("DejaVu", "I", font_path)
 
     page_width = pdf.w - 2 * pdf.l_margin
 
-    # Header
     pdf.set_font("DejaVu", "B", 16)
     pdf.cell(0, 12, f"Class 10 Model Paper - {subject} - {chapter}",
              new_x=XPos.LMARGIN, new_y=YPos.NEXT, align="C")
     pdf.ln(10)
 
-    # Body
     for line in text.split('\n'):
         line = line.strip()
         if not line:
@@ -70,7 +77,6 @@ def create_exam_pdf(text, subject, chapter):
             pdf.multi_cell(page_width, 7.5, line)
             pdf.ln(0.5)
 
-    # Footer
     pdf.ln(5)
     pdf.set_font("DejaVu", "I", 12)
     pdf.cell(0, 10, "*End of Paper*", new_x=XPos.LMARGIN, new_y=YPos.NEXT, align="C")
@@ -98,7 +104,3 @@ def index():
         return response
 
     return render_template('form.html')
-
-
-if __name__ == '__main__':
-    app.run(host='0.0.0.0', debug=True)
