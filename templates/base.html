@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>{% block title %}Model Paper Generator{% endblock %}</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+  {% block head %}{% endblock %}
+</head>
+<body>
+  <div class="zoom-wrapper">
+    {% block content %}{% endblock %}
+  </div>
+
+  <!-- Optional reusable JS -->
+  {# Remove this line if no separate JS file is used #}
+  <script src="{{ url_for('static', filename='js/chapters.js') }}"></script>
+
+  <!-- Scale-to-fit script -->
+  <script>
+    function scaleToFit() {
+      const wrapper = document.querySelector('.zoom-wrapper');
+      const scaleX = window.innerWidth / wrapper.scrollWidth;
+      const scaleY = window.innerHeight / wrapper.scrollHeight;
+      const scale = Math.min(scaleX, scaleY, 1);
+      wrapper.style.transform = `scale(${scale})`;
+    }
+
+    window.addEventListener('resize', scaleToFit);
+    window.addEventListener('load', scaleToFit);
+  </script>
+
+  {% block scripts %}{% endblock %}
+</body>
+</html>

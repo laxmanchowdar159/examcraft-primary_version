@@ -1,0 +1,185 @@
+{% extends "base.html" %}
+{% block head %}
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Model Paper Generator</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&family=Poppins:wght@700&display=swap" rel="stylesheet" />
+{% endblock %}
+
+{% block content %}
+<main class="container">
+  <div class="header-section">
+    <h1><span class="emoji">📄</span> Model Paper Generator</h1>
+    <p class="tagline">Create your perfect practice paper in seconds.</p>
+  </div>
+
+  <form id="paperForm" novalidate>
+    <div class="form-grid">
+      <!-- Subject Selector -->
+      <div class="card">
+        <label for="subject"><span class="emoji">📚</span> Subject</label>
+        <select name="subject" id="subject" required>
+          <option value="" disabled selected>Select a subject</option>
+          <option value="Maths">Mathematics</option>
+          <option value="Science">Science</option>
+          <option value="Social">Social Studies</option>
+          <option value="English">English</option>
+        </select>
+        <small class="hint-text">Choose the subject you're practicing.</small>
+      </div>
+
+      <!-- Chapter Selector -->
+      <div class="card">
+        <label for="chapter"><span class="emoji">📖</span> Chapter</label>
+        <select name="chapter" id="chapter" required disabled>
+          <option value="" disabled selected>Choose a chapter...</option>
+        </select>
+        <small class="hint-text">Select a chapter based on your subject.</small>
+      </div>
+
+      <!-- Difficulty -->
+      <div class="card">
+        <label><span class="emoji">🎯</span> Difficulty Level</label>
+        <div class="difficulty-options">
+          <input type="radio" id="easy" name="difficulty" value="easy">
+          <label for="easy" class="radio-label">Easy</label>
+
+          <input type="radio" id="moderate" name="difficulty" value="moderate" checked>
+          <label for="moderate" class="radio-label">Standard</label>
+
+          <input type="radio" id="difficult" name="difficulty" value="difficult">
+          <label for="difficult" class="radio-label">Hardcore</label>
+        </div>
+        <small class="hint-text">Pick how tough you want the questions.</small>
+      </div>
+
+      <!-- Extra Suggestions -->
+      <div class="card suggestions-card">
+        <label for="suggestions"><span class="emoji">📝</span> Extra Requests (Optional)</label>
+        <textarea id="suggestions" name="suggestions" rows="4" placeholder="E.g., Focus on algebra or exclude diagrams..."></textarea>
+      </div>
+
+      <!-- Button -->
+      <div class="button-container">
+        <button type="submit" id="generateBtn">
+          <span class="emoji">🚀</span> Generate & Download PDF
+        </button>
+      </div>
+    </div>
+  </form>
+
+  <!-- Contact Info -->
+  <div class="contact-info">
+    Trouble? <a href="mailto:laxmanchowdary159@gmail.com">Contact Support</a><br>
+    Made with ❤️ by Laxman Nimmagadda
+  </div>
+
+  <!-- Modal -->
+  <div id="loadingModal" class="modal" aria-hidden="true">
+    <div class="modal-content">
+      Generating your paper, please wait...
+    </div>
+  </div>
+
+  <!-- Error Box -->
+  <div id="errorMessage" class="error-message" role="alert" style="display:none;">
+    Something went wrong. Please try again.
+  </div>
+</main>
+
+<script>
+  const chaptersBySubject = {
+    "Maths": [
+      "Real Numbers", "Polynomials", "Pair of Linear Equations in Two Variables",
+      "Quadratic Equations", "Arithmetic Progressions", "Triangles",
+      "Coordinate Geometry", "Introduction to Trigonometry", "Some Applications of Trigonometry",
+      "Circles", "Constructions", "Areas Related to Circles", "Surface Areas and Volumes",
+      "Statistics", "Probability"
+    ],
+    "Science": [
+      "Chemical Reactions and Equations", "Acids, Bases, and Salts", "Metals and Non-Metals",
+      "Carbon and Its Compounds", "Periodic Classification of Elements", "Life Processes",
+      "Control and Coordination", "How do Organisms Reproduce?", "Heredity and Evolution",
+      "Light – Reflection and Refraction", "The Human Eye and the Colourful World", "Electricity",
+      "Magnetic Effects of Electric Current", "Sources of Energy"
+    ],
+    "Social": [
+      "Nationalism in India", "The Making of a Global World", "The Age of Industrialization",
+      "Print Culture and the Modern World", "Resources and Development", "Forest and Wildlife Resources",
+      "Water Resources", "Agriculture", "Minerals and Energy Resources", "Manufacturing Industries",
+      "Lifelines of National Economy", "Power Sharing", "Federalism", "Democracy and Diversity",
+      "Gender, Religion and Caste", "Popular Struggles and Movements", "Political Parties",
+      "Outcomes of Democracy", "Challenges to Democracy"
+    ],
+    "English": [
+      "A Letter to God", "Nelson Mandela: Long Walk to Freedom", "Two Stories about Flying",
+      "From the Diary of Anne Frank", "Glimpses of India", "Mijbil the Otter",
+      "Madam Rides the Bus", "The Hundred Dresses", "The Hundred Dresses – II",
+      "A Baker from Goa", "Amanda", "Animals", "The Trees", "Fog", "The Tale of Custard the Dragon",
+      "The Ball Poem", "The Invisible Man", "The Treasure within", "Footprints without Feet",
+      "The Magic Drum and Other Favourite Stories", "The Necklace", "The Hack Driver",
+      "Bholi", "The Book that Saved the Earth"
+    ]
+  };
+
+  const subjectSelect = document.getElementById('subject');
+  const chapterSelect = document.getElementById('chapter');
+  const form = document.getElementById('paperForm');
+  const button = document.getElementById('generateBtn');
+  const modal = document.getElementById('loadingModal');
+  const errorBox = document.getElementById('errorMessage');
+
+  subjectSelect.addEventListener('change', () => {
+    const subject = subjectSelect.value;
+    chapterSelect.innerHTML = '<option value="" disabled selected>Choose a chapter...</option>';
+    if (chaptersBySubject[subject]) {
+      chaptersBySubject[subject].forEach(chapter => {
+        const option = document.createElement('option');
+        option.value = chapter;
+        option.textContent = chapter;
+        chapterSelect.appendChild(option);
+      });
+      chapterSelect.disabled = false;
+    } else {
+      chapterSelect.disabled = true;
+    }
+  });
+
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    errorBox.style.display = 'none';
+    modal.setAttribute('aria-hidden', 'false');
+    modal.style.display = 'flex';
+    button.disabled = true;
+    button.setAttribute('aria-busy', 'true');
+
+    const formData = new FormData(form);
+    try {
+      const response = await fetch("/", { method: "POST", body: formData });
+      if (!response.ok || !response.headers.get('Content-Type').includes('application/pdf')) {
+        throw new Error("Invalid response");
+      }
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      const filename = response.headers.get('Content-Disposition')?.split('filename=')[1] || 'model_paper.pdf';
+      a.href = url;
+      a.download = filename.replace(/["']/g, '');
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      errorBox.style.display = 'block';
+    } finally {
+      modal.setAttribute('aria-hidden', 'true');
+      modal.style.display = 'none';
+      button.disabled = false;
+      button.setAttribute('aria-busy', 'false');
+    }
+  });
+</script>
+{% endblock %}
